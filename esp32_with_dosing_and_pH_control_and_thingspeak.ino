@@ -6,13 +6,14 @@
 #include "SoftwareSerial.h"
 #include <ArduinoJson.h>
 
+//инициализация всего для работы ThingSpeak.com
 #include <ThingSpeak.h>
-const char* thingSpeakApiKey = "03IX7QQIDRH1P9OL";
-unsigned long thingSpeakChannelId = 2391840;
+const char* thingSpeakApiKey = "03IX7QQIDRH1P9OL"; //api key
+unsigned long thingSpeakChannelId = 2391840; //channel ID
 WiFiClient  client;
-float lastThingSpeakTAirWriteTime;
-float lastThingSpeakHumAirWriteTime;
-float ThingSpeakWriteInterval = 20000;
+float lastThingSpeakWriteTime; //таймер для записи времени последней отправки данных на ThingSpeak
+float ThingSpeakWriteInterval = 20000; //интервал отправки данных в облако 20сек (не менее 15 сек)
+//переменные для отправки данных с датчиков на ThingSpeak.com
 float sen_t_air = 0.0; 
 float sen_hum_air = 0.0;
 float sen_co2_air = 0.0;
@@ -30,29 +31,30 @@ bool dataReadyToSend = false; // Флаг готовности данных к �
 //новый код для дозировки
 //назначение пинов для моторов, скоростей каждого их продолжительности работы цикла работы моторов
 const int motorPins[3] = {26, 25, 33}; // Пины PWM, подключенные к моторам на ESP32
-const int motorSpeeds[3] = {180, 174, 169}; // Скорость для каждого мотора
-const int motorCycleTime = 600; // Время цикла работы мотора в миллисекундах (600мс)
+const int motorSpeeds[3] = {180, 174, 169}; // Скорость для каждого мотора от 1 до 255; эти скорости вы узнаете после калибровки своих перистальтических насосов
+const int motorCycleTime = 600; // Время цикла работы мотора в миллисекундах (600мс) - за это время на заданной скорости мотор наливает 1 миллилитр
 
 //переменные для контроля pH в заданных рамках
 float ph;
 bool isPhReceived = false; // Флаг для проверки, получено ли значение pH через serial2
-unsigned long pumpUpTimer = 0; //таймеры для выключения моторов pH
+unsigned long pumpUpTimer = 0; //таймеры для вкл/выключения моторов pH
 unsigned long pumpDownTimer = 0;
-const unsigned long pumpInterval = 2000; // Время работы насоса в миллисекундах (2 секунды)
+const unsigned long pumpInterval = 5000; // Время работы насоса pH+ или pH- в миллисекундах (2 секунды)
 const int pumpUpPin = 32; // Пин подключенный к мотору pH+
 const int pumpDownPin = 35; // Пин подключенный к мотору pH-
-unsigned long pumpUpStartTime = 0;
-unsigned long pumpDownStartTime = 0;
+unsigned long pumpUpStartTime = 0; //время включения насоса ph+
+unsigned long pumpDownStartTime = 0; //время включения насоса ph-
 bool pumpUpActive = false; //флаги активности моторов pH
 bool pumpDownActive = false;
-const long webInterval = 30000; //таймер запуска функции выравнивания pH
-unsigned long previouspHMillis = 0; //для корректировки рН
+const long webInterval = 10000; //таймер запуска функции выравнивания pH (30сек)
+unsigned long previouspHMillis = 0; //таймер отсечки работы моторов корректировки рН
 //конец нового кода
 
-const char* wlan_ssid             = "Xiaomi_7246";
-const char* wlan_password         = "1258959v";
-const char* ws_host               = "192.168.31.198";
-const int   ws_port               = 8080;
+const char* wlan_ssid             = "Vodafone-B864";
+const char* wlan_password         = "4J7dmPMgx76AXgYb";
+const char* ws_host               = "192.168.0.239";
+const int   ws_port               = 8080; 
+
 String roomName = "q";
 String username = "esp32";
 /** Flag if task should run */
@@ -93,15 +95,15 @@ void setup() {
       ledcSetup(i, 1000, 8); // Настройка канала PWM, частота 1000 Гц, разрешение 8 бит
       ledcAttachPin(motorPins[i], i); // Привязка пина мотора к каналу PWM
      }
+    ThingSpeak.begin(client); //запуск клиента для отправки данных в облако ThingSpeak
     //конец нового кода
-    ThingSpeak.begin(client);
-    //назначаем пины pH+ и pH- как OUTPUT
-    pinMode(pumpUpPin, OUTPUT); 
+    pinMode(pumpUpPin, OUTPUT);
     pinMode(pumpDownPin, OUTPUT);
+    
 }
 void loop() {
     webSocket.loop();
-    delay(150);
+    //delay(150); зачем он тут нужен?
 
     unsigned long currentMillis = millis();
 //убиваем симулятор
@@ -144,54 +146,61 @@ void loop() {
 //         //sendMessage(roomName, username, String(level), "SEN_LEVEL"); // SIMULATOR
 //         // Serial.println("[SIMULATOR]  SEN_LEVEL" + level);
 //     }
-    serialGetData(currentMillis);
+    serialGetData(currentMillis); //функция получения и парсинга данных с ардуино по Rx Tx
 
 //новый код 
-
-
-//вызов функции выравнивания pH каждые "webInterval" секунд
+//вызов функции выравнивания pH каждые "webInterval" (30) секунд ТОЛЬКО при получении корректных данных с датчика рН (не nan и не inf)
   if (isPhReceived && (currentMillis - previouspHMillis >= webInterval)) {
       previouspHMillis = currentMillis;
-      controlPumps(sen_ph, currentMillis);
+      controlPumps(sen_ph, currentMillis); //смотрит, входит ли значение pH в заданные рамки и запускает ph+ или ph- если ph высокий или слишком низкий
       Serial.print("controlPumps-------------------->");Serial.println(sen_ph);
     }
-    // Отключение насосов по истечении таймеров
+    // Отключение насоса pH+ по истечении таймера pumpInterval (2000мс = 2сек)
   if (pumpUpActive && (currentMillis - pumpUpStartTime >= pumpInterval)) {
       digitalWrite(pumpUpPin, HIGH); //тут выбрать HIGH или LOW в соответствии с типом реле - нормально включенное или нормально выключенное
       pumpUpActive = false;
       Serial.println("Отключение pH+ по таймеру");
-      
-      //отладочные выводы в монитор порта
-      // Serial.print("Текущее время currentMillis: ");
-      // Serial.println(currentMillis);
-      // Serial.print("Текущее время Millis: ");
-      // Serial.println(millis());
-      // Serial.print("Время начала работы насоса pH+: ");
-      // Serial.println(pumpUpStartTime);
-      // Serial.print("Интервал работы: ");
-      // Serial.println(pumpInterval);
 
     }
-
+    // Отключение насоса pH- по истечении таймера pumpInterval (2000мс = 2сек)
   if (pumpDownActive && (currentMillis - pumpDownStartTime >= pumpInterval)) {
       digitalWrite(pumpDownPin, HIGH);  //тут выбрать HIGH или LOW в соответствии с типом реле - нормально включенное или нормально выключенное
       pumpDownActive = false;
       Serial.println("Отключение pH- по таймеру");
   }
-//конец нового кода
-
-
 }
+
+//код удержания pH в заданных рамках. Принимает переменную pH
+void controlPumps(float ph, unsigned long currentMillis) {
+  if (!isnan(ph) && !isinf(ph)) {  //TODO
+    if (ph < 5.7 && !pumpUpActive) {
+      digitalWrite(pumpUpPin, LOW);
+      pumpUpStartTime = currentMillis;
+      pumpUpActive = true;
+      Serial.print("Включение pH+ ");
+      Serial.println(ph);
+    }
+
+    if (ph > 6.4 && !pumpDownActive) {
+      digitalWrite(pumpDownPin, LOW);
+      pumpDownStartTime = currentMillis;
+      pumpDownActive = true;
+      Serial.print("Включение pH- ");
+      Serial.println(ph);
+    }
+  }  
+}
+//конец нового кода
 
 void serialGetData(unsigned long currentMillis) {
 
 
-    while (Serial2.available() > 0) {
-        String line = Serial2.readStringUntil('\n');
+    while (Serial2.available() > 0) { //пока приходят данные через Serial2 и они не пустые, загоняем их в String line
+        String line = Serial2.readStringUntil('\n'); //ищем в строке String line символ конца строки \n
         line.trim();  // Удаляем пробельные символы в начале и конце строки, если они есть
-        //Serial.print("Получена строка: ");
-        Serial.println(line);
+        Serial.println(line); //вывод в монитор порта строки, которую мы получили
         // Проверяем, что строка не пуста
+        
         if (line.length() > 0) {
             char * sensor = strtok(&line[0], " "); //разделение строки на Sensor и Data
             char * data = strtok(NULL, " ");
@@ -205,7 +214,7 @@ void serialGetData(unsigned long currentMillis) {
                         Serial.println("Некорректные данные с датчика pH: " + dataLower);
 
                     } else {
-                        isPhReceived = true;
+                        isPhReceived = true; //мы прошли проверку на корректность данных рН и начинает работать функция controlPumps
                         float ph = String(data).toFloat(); // Преобразование данных в float
                         sen_ph = ph;
                         Serial.print("Преобразованные данные с датчика pH: "); Serial.println(ph);
@@ -226,9 +235,10 @@ void serialGetData(unsigned long currentMillis) {
                 } else if (String(sensor) == "SEN_T_H2O") {
                   sen_t_h2o = String(data).toFloat();
                   dataReadyToSend = true;
-                } 
+                } //TODO add "else if" logic for SEN_H20_SWITCH_1
 
-                      if (dataReadyToSend && (currentMillis - lastThingSpeakHumAirWriteTime >= ThingSpeakWriteInterval)) {
+                      //отправка показаний всех датчиков на ThingSpeak, если прошло ThingSpeakWriteInterval секунд (20сек)
+                      if (dataReadyToSend && (currentMillis - lastThingSpeakWriteTime >= ThingSpeakWriteInterval)) {
                           // Отправка данных
                           ThingSpeak.setField(1, sen_t_air);
                           ThingSpeak.setField(2, sen_hum_air);
@@ -240,24 +250,25 @@ void serialGetData(unsigned long currentMillis) {
 
                           // Сброс флага и обновление таймера
                           dataReadyToSend = false;
-                          lastThingSpeakHumAirWriteTime = currentMillis;
+                          lastThingSpeakWriteTime = currentMillis;
                       }
 
 
 
-                //конец нового кода
+                      //было sendMessage(roomName, username, String(data), String(sensor));
                       if (sensor && data) {
                           String cleanedSensor = cleanString(sensor);
                           String cleanedData = cleanString(data);
-                          //Serial.println("Cleaned Sensor: " + cleanedSensor);
-                          //Serial.println("Cleaned Data: " + cleanedData);
-                          sendMessage(roomName, username, cleanedData, cleanedSensor);
+                          //Serial.println("Cleaned Sensor: " + cleanedSensor); //отладочная информация для проверки отправленных данных на backednd
+                          // Serial.println("Cleaned Data: " + cleanedData);
+                          sendMessage(roomName, username, cleanedData, cleanedSensor); //TODO отправка данных на background
                       }
-
+                    //конец нового кода
         } 
     }
 }
 
+//функция очистки данных от \r и \n перед отправкой на backend
 String cleanString(String input) {
     String output = "";
     for (char c : input) {
@@ -268,7 +279,7 @@ String cleanString(String input) {
     return output;
 }
 
-float float_rand( float min, float max )
+float float_rand( float min, float max ) //TODO попробовать загасить
 {
     float scale = rand() / (float) RAND_MAX; /* [0, 1.0] */
     return min + scale * ( max - min );      /* [min, max] */
@@ -564,11 +575,12 @@ void connectToWebSocket() {
 }
 
 //новый код для дозировки
-//ниже - функция активации моторов и 5 функций дозировки, которые соответствуют каждому из этапов роста растений. 
-//Вызов функции запускает дозировочные насосы в соответствии с текущим этапом роста растения
+//ниже - происходит активации моторов и одной из 5 функций дозировки, которые соответствуют каждому из стадии роста растений. 
+//
+//Вызов функции запускает дозировочные насосы в соответствии с текущей (выбранной) стадией роста растения
 //Вызов функции добавляет удобрения в расчете на 1 литр раствора
 
-//функция активации моторов. данная функция вызывается из функций "firstRoots()", firstTrueLeaves() 
+//функция активации моторов. данная функция вызывается из функций "firstRoots()", firstTrueLeaves() и тд
 void runMotor(int motorIndex, float cycles) {
   int duration = motorCycleTime * cycles; // Расчет продолжительности работы мотора
   ledcWrite(motorIndex, motorSpeeds[motorIndex]); // Установка скорости мотора с использованием PWM
@@ -577,11 +589,11 @@ void runMotor(int motorIndex, float cycles) {
   ledcWrite(motorIndex, 0); // Остановка мотора
 }
 
-//
+//функция дозировки в соответствии с таблицей flora series (гидропоника) от производителя Terra Aquatica
 //первые корешки
 void firstRoots() {
   Serial.println("Первые корешки");
-  runMotor(0, 0.5);
+  runMotor(0, 0.5); //передаем в функцию запуска моторов runMotor номер мотора (0) и множитель cycles(0.5мл/л) для motorCycleTime (600мс)
   runMotor(1, 0.5); 
   runMotor(2, 0.5); 
 }
@@ -618,23 +630,4 @@ void flowering() {
   runMotor(2, 2.4); 
 }
 
-//код удержания pH в заданных рамках. Принимает переменную pH
-void controlPumps(float ph, unsigned long currentMillis) {
-  if (!isnan(ph) && !isinf(ph)) {  
-    if (ph < 5.7 && !pumpUpActive) {
-      digitalWrite(pumpUpPin, LOW);
-      pumpUpStartTime = currentMillis;
-      pumpUpActive = true;
-      Serial.println("Включение pH+");
-      Serial.println(ph);
-    }
 
-    if (ph > 6.4 && !pumpDownActive) {
-      digitalWrite(pumpDownPin, LOW);
-      pumpDownStartTime = currentMillis;
-      pumpDownActive = true;
-      Serial.println("Включение pH-");
-    }
-  }  
-}
-//конец нового кода
