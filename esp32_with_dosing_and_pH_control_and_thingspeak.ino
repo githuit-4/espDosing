@@ -35,7 +35,7 @@ const int motorSpeeds[3] = {180, 174, 169}; // Скорость для кажд�
 const int motorCycleTime = 600; // Время цикла работы мотора в миллисекундах (600мс) - за это время на заданной скорости мотор наливает 1 миллилитр
 
 //переменные для контроля pH в заданных рамках
-float ph; //TODO выпилить из кода эту переменную, заменить на уже рабочую sen_ph
+float ph;
 bool isPhReceived = false; // Флаг для проверки, получено ли значение pH через serial2
 unsigned long pumpUpTimer = 0; //таймеры для вкл/выключения моторов pH
 unsigned long pumpDownTimer = 0;
@@ -50,9 +50,12 @@ const long webInterval = 15000; //таймер запуска функции в�
 unsigned long previouspHMillis = 0; //таймер отсечки работы моторов корректировки рН
 //конец нового кода
 
-const char* wlan_ssid             = "Xiaomi_7246";
-const char* wlan_password         = "1258959v";
-const char* ws_host               = "192.168.31.198";
+// const char* wlan_ssid             = "Xiaomi_7246";
+// const char* wlan_password         = "1258959v";
+// const char* ws_host               = "192.168.31.198";
+const char* wlan_ssid             = "Vodafone-B864";
+const char* wlan_password         = "4J7dmPMgx76AXgYb";
+const char* ws_host               = "192.168.0.239";
 const int   ws_port               = 8080; 
 
 String roomName = "q";
