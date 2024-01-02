@@ -36,6 +36,7 @@ const int motorCycleTime = 600; // Время цикла работы мотор
 
 //переменные для контроля pH в заданных рамках
 float ph; //TODO выпилить из кода эту переменную, заменить на уже рабочую sen_ph
+//TODO снести флаг isPhReceived
 bool isPhReceived = false; // Флаг для проверки, получено ли значение pH через serial2
 unsigned long pumpUpTimer = 0; //таймеры для вкл/выключения моторов pH
 unsigned long pumpDownTimer = 0;
@@ -156,7 +157,7 @@ void loop() {
   if (isPhReceived && (currentMillis - previouspHMillis >= webInterval)) {
       previouspHMillis = currentMillis;
       if (sen_ph > 0) { //этот if проверяет, что датчик pH не отвалился во время эксплуатации
-      controlPumps(sen_ph, currentMillis); //смотрит, входит ли значение pH в заданные рамки и запускает ph+ или ph- если ph высокий или слишком низкий
+      controlPumps(sen_ph, currentMillis); //вызываем фунцию controlPumps, передаем ей не-Nan, не-INF, не-0 значение pH
       Serial.print("controlPumps-------------------->");Serial.println(sen_ph);
       } else {Serial.println("У вас pH отвалился, сделайте там чонить ");}
     }
@@ -176,6 +177,7 @@ void loop() {
 }
 
 //код удержания pH в заданных рамках. Принимает переменную pH
+//смотрит, входит ли значение pH в заданные рамки и запускает ph+ или ph- если ph высокий или слишком низкий
 void controlPumps(float ph, unsigned long currentMillis) {
   if (!isnan(ph) && !isinf(ph)) {  //TODO
     if (ph < 5.7 && !pumpUpActive) {
@@ -215,6 +217,7 @@ void serialGetData(unsigned long currentMillis) {
                     String dataLower = String(data);
                     dataLower.toLowerCase();
                     // Проверка на специальные случаи перед преобразованием
+                    //TODO снести проверку NaN и INF
                     if (dataLower == "inf" || dataLower == "nan") {
                         Serial.println("Некорректные данные с датчика pH: " + dataLower);
 
