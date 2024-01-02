@@ -30,29 +30,29 @@ bool dataReadyToSend = false; // Флаг готовности данных к �
 
 //новый код для дозировки
 //назначение пинов для моторов, скоростей каждого их продолжительности работы цикла работы моторов
-const int motorPins[3] = {26, 25, 33}; // Пины PWM, подключенные к моторам на ESP32
+const int motorPins[3] = {27, 26, 25}; // Пины PWM, подключенные к моторам на ESP32
 const int motorSpeeds[3] = {180, 174, 169}; // Скорость для каждого мотора от 1 до 255; эти скорости вы узнаете после калибровки своих перистальтических насосов
 const int motorCycleTime = 600; // Время цикла работы мотора в миллисекундах (600мс) - за это время на заданной скорости мотор наливает 1 миллилитр
 
 //переменные для контроля pH в заданных рамках
-float ph;
+float ph; //TODO выпилить из кода эту переменную, заменить на уже рабочую sen_ph
 bool isPhReceived = false; // Флаг для проверки, получено ли значение pH через serial2
 unsigned long pumpUpTimer = 0; //таймеры для вкл/выключения моторов pH
 unsigned long pumpDownTimer = 0;
 const unsigned long pumpInterval = 5000; // Время работы насоса pH+ или pH- в миллисекундах (2 секунды)
-const int pumpUpPin = 32; // Пин подключенный к мотору pH+
-const int pumpDownPin = 35; // Пин подключенный к мотору pH-
+const int pumpUpPin = 33; // Пин подключенный к мотору pH+
+const int pumpDownPin = 32; // Пин подключенный к мотору pH-
 unsigned long pumpUpStartTime = 0; //время включения насоса ph+
 unsigned long pumpDownStartTime = 0; //время включения насоса ph-
 bool pumpUpActive = false; //флаги активности моторов pH
 bool pumpDownActive = false;
-const long webInterval = 10000; //таймер запуска функции выравнивания pH (30сек)
+const long webInterval = 15000; //таймер запуска функции выравнивания pH (30сек)
 unsigned long previouspHMillis = 0; //таймер отсечки работы моторов корректировки рН
 //конец нового кода
 
-const char* wlan_ssid             = "Vodafone-B864";
-const char* wlan_password         = "4J7dmPMgx76AXgYb";
-const char* ws_host               = "192.168.0.239";
+const char* wlan_ssid             = "Xiaomi_7246";
+const char* wlan_password         = "1258959v";
+const char* ws_host               = "192.168.31.198";
 const int   ws_port               = 8080; 
 
 String roomName = "q";
@@ -157,14 +157,14 @@ void loop() {
     }
     // Отключение насоса pH+ по истечении таймера pumpInterval (2000мс = 2сек)
   if (pumpUpActive && (currentMillis - pumpUpStartTime >= pumpInterval)) {
-      digitalWrite(pumpUpPin, HIGH); //тут выбрать HIGH или LOW в соответствии с типом реле - нормально включенное или нормально выключенное
+      digitalWrite(pumpUpPin, LOW); //тут выбрать HIGH или LOW в соответствии с типом реле - нормально включенное или нормально выключенное
       pumpUpActive = false;
       Serial.println("Отключение pH+ по таймеру");
 
     }
     // Отключение насоса pH- по истечении таймера pumpInterval (2000мс = 2сек)
   if (pumpDownActive && (currentMillis - pumpDownStartTime >= pumpInterval)) {
-      digitalWrite(pumpDownPin, HIGH);  //тут выбрать HIGH или LOW в соответствии с типом реле - нормально включенное или нормально выключенное
+      digitalWrite(pumpDownPin, LOW);  //тут выбрать HIGH или LOW в соответствии с типом реле - нормально включенное или нормально выключенное
       pumpDownActive = false;
       Serial.println("Отключение pH- по таймеру");
   }
@@ -174,7 +174,7 @@ void loop() {
 void controlPumps(float ph, unsigned long currentMillis) {
   if (!isnan(ph) && !isinf(ph)) {  //TODO
     if (ph < 5.7 && !pumpUpActive) {
-      digitalWrite(pumpUpPin, LOW);
+      digitalWrite(pumpUpPin, HIGH);
       pumpUpStartTime = currentMillis;
       pumpUpActive = true;
       Serial.print("Включение pH+ ");
@@ -182,7 +182,7 @@ void controlPumps(float ph, unsigned long currentMillis) {
     }
 
     if (ph > 6.4 && !pumpDownActive) {
-      digitalWrite(pumpDownPin, LOW);
+      digitalWrite(pumpDownPin, HIGH);
       pumpDownStartTime = currentMillis;
       pumpDownActive = true;
       Serial.print("Включение pH- ");
