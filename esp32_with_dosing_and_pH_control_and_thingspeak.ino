@@ -152,8 +152,10 @@ void loop() {
 //вызов функции выравнивания pH каждые "webInterval" (30) секунд ТОЛЬКО при получении корректных данных с датчика рН (не nan и не inf)
   if (isPhReceived && (currentMillis - previouspHMillis >= webInterval)) {
       previouspHMillis = currentMillis;
+      if (sen_ph > 0) { //этот if проверяет, что датчик pH не отвалился во время эксплуатации
       controlPumps(sen_ph, currentMillis); //смотрит, входит ли значение pH в заданные рамки и запускает ph+ или ph- если ph высокий или слишком низкий
       Serial.print("controlPumps-------------------->");Serial.println(sen_ph);
+      } else {Serial.println("У вас pH отвалился, сделайте там чонить ");}
     }
     // Отключение насоса pH+ по истечении таймера pumpInterval (2000мс = 2сек)
   if (pumpUpActive && (currentMillis - pumpUpStartTime >= pumpInterval)) {
