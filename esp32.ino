@@ -8,10 +8,10 @@
 
 //инициализация всего для работы ThingSpeak.com
 #include <ThingSpeak.h>
-//const char* thingSpeakApiKey = "03IX7QQIDRH1P9OL"; //api key Max
-//unsigned long thingSpeakChannelId = 2391840; //channel ID 
-const char* thingSpeakApiKey = "R7QXC1UF2K7BJ8D5"; //api key Rus
-unsigned long thingSpeakChannelId = 2396017; //channel ID 
+const char* thingSpeakApiKey = "YT8F9Q16M44C4S1T"; //api key Max 
+unsigned long thingSpeakChannelId = 2401905; //channel ID
+//const char* thingSpeakApiKey = "R7QXC1UF2K7BJ8D5"; //api key Rus
+//unsigned long thingSpeakChannelId = 2396017; //channel ID 
 WiFiClient  client;
 float lastThingSpeakWriteTime; //таймер для записи времени последней отправки данных на ThingSpeak
 float ThingSpeakWriteInterval = 20000; //интервал отправки данных в облако 20сек (не менее 15 сек)
