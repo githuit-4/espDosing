@@ -380,7 +380,8 @@ void executeCommand(String command) {
         //“REL_GROW”
     else if (command == "REL_GROW_ON") {
         rel_grow = true;
-        Serial.printf("[SIMULATOR] REL_GROW on!\n");
+        Serial.printf("received First Leaves dosing ON\n");
+        firstTrueLeaves();
     } else if (command == "REL_GROW_OFF") {
         rel_grow = false;
         Serial.printf("[SIMULATOR] REL_GROW off!\n");
@@ -389,7 +390,8 @@ void executeCommand(String command) {
         //“REL_BLOOM”
     else if (command == "REL_BLOOM_ON") {
         rel_bloom = true;
-        Serial.printf("[SIMULATOR] REL_BLOOM on!\n");
+        Serial.printf("received GROW dosing ON\n");
+        growing();
     } else if (command == "REL_BLOOM_OFF") {
         rel_bloom = false;
         Serial.printf("[SIMULATOR] REL_BLOOM off!\n");
@@ -621,6 +623,7 @@ void firstTrueLeaves() {
   runMotor(0, 1);
   runMotor(1, 1); 
   runMotor(2, 1); 
+  rel_grow = false;
   sendMessage(roomName, username, "OFF" , "REL_GROW");
   Serial.println("..................True Leaves dosing done..................");
   
@@ -633,6 +636,7 @@ void growing() {
   runMotor(0, 1.8);
   runMotor(1, 1.2); 
   runMotor(2, 0.6); 
+  rel_bloom = false;
   sendMessage(roomName, username, "OFF" , "REL_BLOOM");
   Serial.println("..................GROWING dosing done..................");
   
